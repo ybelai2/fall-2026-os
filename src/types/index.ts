@@ -1,3 +1,6 @@
+================================================
+FILE: src/types/index.ts
+================================================
 export type Category = 
   | 'CLASS' 
   | 'CAREER' 
@@ -62,4 +65,12 @@ export interface AcademicDate {
   category: Category;
   noClasses: boolean;
   universityClosed: boolean;
+}
+
+// NEW: Wallpaper System Types
+export interface WeeklyWallpaper {
+  weekKey: string;       // Format: "YYYY-MM-DD" (Always a Monday)
+  imageUrl: string;
+  title?: string;
+  quote?: string;
 }
