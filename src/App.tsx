@@ -12,13 +12,10 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   
-  // Destructure the new notes data and update function
   const { events, exceptions, notes, toggleCompletion, addEvent, deleteEvent, editEvent, updateNote } = useCalendarStore();
 
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i));
-  
-  // Unique key for this specific week's notes
   const currentWeekKey = format(weekStart, 'yyyy-MM-dd');
 
   const handlePrevWeek = () => setCurrentDate(prev => subDays(prev, 7));
@@ -32,14 +29,15 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-background text-primary">
-      <header className="border-b border-border bg-surface px-6 py-4 flex justify-between items-center shrink-0">
+      {/* RESPONSIVE HEADER: Stacks on mobile, row on desktop */}
+      <header className="border-b border-border bg-surface px-4 md:px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
         <div>
           <h1 className="text-xl font-bold tracking-tight">FALL 2026 OS</h1>
           <p className="text-xs text-muted font-mono tracking-widest mt-1">FOCUS. DISCIPLINE. FINISH STRONG.</p>
         </div>
         
-        <div className="flex items-center gap-6">
-          <div className="flex items-center bg-background border border-border rounded-lg overflow-hidden">
+        <div className="flex flex-wrap items-center gap-3 md:gap-6 w-full md:w-auto justify-between md:justify-end">
+          <div className="flex items-center bg-background border border-border rounded-lg overflow-hidden shrink-0">
             <button onClick={handlePrevWeek} className="p-2 hover:bg-border transition-colors text-muted hover:text-primary">
               <ChevronLeft size={18} />
             </button>
@@ -51,28 +49,31 @@ export default function App() {
             </button>
           </div>
 
-          <span className="text-sm font-mono text-muted w-36 text-right">
+          <span className="text-sm font-mono text-muted text-right hidden sm:block">
             Week of {format(weekStart, 'MMM d, yyyy')}
           </span>
           
           <button 
             onClick={openNewEventModal}
-            className="bg-primary text-background px-4 py-2 text-sm font-bold rounded hover:bg-gray-200 transition-colors ml-4"
+            className="bg-primary text-background px-4 py-2 text-sm font-bold rounded hover:bg-gray-200 transition-colors shrink-0"
           >
             + ADD BLOCK
           </button>
         </div>
       </header>
 
-      <main className="flex-1 p-6 overflow-hidden flex flex-col gap-6">
-        {/* CALENDAR GRID */}
-        <div className="grid grid-cols-7 gap-4 flex-1 min-h-0">
+      <main className="flex-1 p-4 md:p-6 overflow-hidden flex flex-col gap-6">
+        {/* RESPONSIVE GRID: Horizontal scroll/swipe on mobile, 7-columns on desktop */}
+        <div className="flex md:grid md:grid-cols-7 overflow-x-auto md:overflow-visible gap-4 flex-1 min-h-0 snap-x snap-mandatory pb-2 md:pb-0 hide-scrollbar">
           {weekDays.map(date => {
             const dateStr = format(date, 'yyyy-MM-dd');
             const dailyEvents = compileDay(date, events, exceptions, academicCalendar);
 
             return (
-              <div key={dateStr} className="border border-border rounded-lg bg-surface flex flex-col overflow-hidden">
+              <div 
+                key={dateStr} 
+                className="w-[85vw] sm:w-[300px] md:w-auto shrink-0 snap-center border border-border rounded-lg bg-surface flex flex-col overflow-hidden"
+              >
                 <div className="p-3 border-b border-border bg-[#1e1e20] flex justify-between items-center shrink-0">
                   <span className="font-bold">{format(date, 'EEE').toUpperCase()}</span>
                   <span className="text-muted text-sm font-mono">{format(date, 'd')}</span>
@@ -85,7 +86,6 @@ export default function App() {
                   {dailyEvents.map(event => (
                     <div 
                       key={event.instanceId}
-                      /* FIX: Added the "group" class here so hover states work! */
                       className={`group p-2 rounded border text-sm flex flex-col gap-2 transition-colors ${
                         event.isCompleted 
                           ? 'border-border bg-background text-muted opacity-60'
@@ -99,9 +99,8 @@ export default function App() {
                       <div className="flex justify-between items-start gap-2">
                         <span className="font-bold leading-tight">{event.title}</span>
                         
-                        {/* FIX: Now uses group-hover to appear smoothly */}
-                        <div className="flex gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                          
+                        {/* On mobile, icons might need to be visible by default since there is no 'hover'. We'll make them slightly visible. */}
+                        <div className="flex gap-2 shrink-0 opacity-40 md:opacity-0 group-hover:opacity-100 transition-opacity">
                           <button 
                             onClick={() => {
                               const baseEvent = events.find(e => e.id === event.id);
@@ -132,7 +131,6 @@ export default function App() {
                             {event.isCompleted ? <CheckCircle2 size={16} /> : <Circle size={16} />}
                           </button>
                         </div>
-
                       </div>
                       <span className="text-xs font-mono opacity-80">
                         {event.startTime} - {event.endTime}
