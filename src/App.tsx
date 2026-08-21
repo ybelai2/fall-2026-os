@@ -7,7 +7,7 @@ import { compileDay } from './store/recurrenceEngine';
 import { academicCalendar } from './data/academicCalendar';
 import { EventModal } from './components/EventModal';
 import { WallpaperManager } from './components/WallpaperManager';
-import type { CalendarEvent } from './types';
+import type { CalendarEvent, WeeklyWallpaper } from './types';
 
 export default function App() {
   const [currentDate, setCurrentDate] = useState(new Date()); 
@@ -192,7 +192,7 @@ export default function App() {
             setIsModalOpen(false);
             setEditingEvent(null);
           }}
-          onSave={(newEventData) => {
+          onSave={(newEventData: Omit<CalendarEvent, 'id'>) => {
             if (editingEvent) {
               editEvent(editingEvent.id, newEventData);
             } else {
@@ -208,7 +208,7 @@ export default function App() {
         <WallpaperManager 
           currentWallpaper={currentWallpaper}
           onClose={() => setIsWallpaperModalOpen(false)}
-          onSave={(data) => updateWallpaper(currentWeekKey, data)}
+          onSave={(data: Partial<WeeklyWallpaper>) => updateWallpaper(currentWeekKey, data)}
           onReset={() => resetWallpaper(currentWeekKey)}
         />
       )}
