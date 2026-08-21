@@ -1,6 +1,3 @@
-================================================
-FILE: src/App.tsx
-================================================
 import { useState } from 'react';
 import { format, addDays, subDays, startOfWeek } from 'date-fns';
 import { CheckCircle2, Circle, Trash2, Edit2, ChevronLeft, ChevronRight } from 'lucide-react';

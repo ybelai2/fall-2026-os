@@ -1,6 +1,3 @@
-================================================
-FILE: src/store/useWallpaperStore.ts
-================================================
 import { useState, useEffect, useCallback } from 'react';
 import { defaultWallpapers } from '../data/wallpapers';
 import type { WeeklyWallpaper } from '../types';

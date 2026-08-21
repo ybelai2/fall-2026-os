@@ -1,6 +1,3 @@
-================================================
-FILE: src/data/wallpapers.ts
-================================================
 import type { WeeklyWallpaper } from '../types';
 
 export const defaultWallpapers: WeeklyWallpaper[] = [

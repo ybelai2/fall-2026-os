@@ -1,6 +1,3 @@
-================================================
-FILE: src/components/WallpaperManager.tsx
-================================================
 import React, { useState } from 'react';
 import type { WeeklyWallpaper } from '../types';
 
