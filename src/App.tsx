@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { format, addDays, subDays, startOfWeek } from 'date-fns';
-import { CheckCircle2, Circle, Trash2, Edit2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CheckCircle2, Circle, Trash2, Edit2, ChevronLeft, ChevronRight, Clock, Users, BookOpen } from 'lucide-react';
 import { useCalendarStore } from './store/useCalendarStore';
 import { useWallpaperStore } from './store/useWallpaperStore';
 import { compileDay } from './store/recurrenceEngine';
 import { academicCalendar } from './data/academicCalendar';
+import { generateSyllabusEvents } from './data/syllabusEvents';
 import { EventModal } from './components/EventModal';
 import { WallpaperManager } from './components/WallpaperManager';
 import type { CalendarEvent, WeeklyWallpaper } from './types';
@@ -14,6 +15,8 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isWallpaperModalOpen, setIsWallpaperModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const [selectedCourseFilter, setSelectedCourseFilter] = useState<string>('ALL');
+  const [showTbdModal, setShowTbdModal] = useState(false);
   
   const { events, exceptions, notes, toggleCompletion, addEvent, deleteEvent, editEvent, updateNote } = useCalendarStore();
   const { getWallpaper, updateWallpaper, resetWallpaper } = useWallpaperStore();
@@ -33,6 +36,9 @@ export default function App() {
     setIsModalOpen(true);
   };
 
+  // Fetch all TBD syllabus items for the TBD view
+  const tbdSyllabusItems = generateSyllabusEvents().filter(item => item.status === 'TBD' || item.status === 'ANNOUNCED_LATER');
+
   return (
     <div className="relative min-h-screen flex flex-col font-sans text-primary isolate">
       {/* --- WALLPAPER SYSTEM --- */}
@@ -41,7 +47,6 @@ export default function App() {
         className="fixed inset-0 bg-cover bg-center -z-10 opacity-20 transition-all duration-700 ease-in-out"
         style={{ backgroundImage: `url('${currentWallpaper.imageUrl}')` }}
       />
-      {/* Ambient quote display on desktop */}
       {currentWallpaper.quote && (
         <div className="fixed bottom-6 right-8 text-right -z-10 hidden md:flex flex-col items-end opacity-40 max-w-md pointer-events-none transition-opacity duration-700">
           {currentWallpaper.title && <h3 className="font-bold text-lg tracking-widest">{currentWallpaper.title}</h3>}
@@ -52,32 +57,51 @@ export default function App() {
       {/* --- RESPONSIVE HEADER --- */}
       <header className="border-b border-border bg-surface/90 backdrop-blur px-4 md:px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
         <div>
-          <h1 className="text-xl font-bold tracking-tight">FALL 2026 OS</h1>
-          <p className="text-xs text-muted font-mono tracking-widest mt-1">FOCUS. DISCIPLINE. FINISH STRONG.</p>
+          <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
+            FALL 2026 OS <span className="text-xs font-mono px-2 py-0.5 rounded bg-class/20 text-yellow-300 border border-class/30">Syllabus Active</span>
+          </h1>
+          <p className="text-xs text-muted font-mono tracking-widest mt-1">COSC 457 • COSC 418 • COSC 350 • MATH 265</p>
         </div>
         
-        <div className="flex flex-wrap items-center gap-3 md:gap-6 w-full md:w-auto justify-between md:justify-end">
+        <div className="flex flex-wrap items-center gap-3 md:gap-4 w-full md:w-auto justify-between md:justify-end">
+          {/* COURSE FILTER BAR */}
+          <div className="flex items-center bg-background/80 border border-border rounded-lg p-1 text-xs font-mono">
+            {['ALL', 'COSC 457', 'COSC 418', 'COSC 350', 'MATH 265'].map(course => (
+              <button
+                key={course}
+                onClick={() => setSelectedCourseFilter(course)}
+                className={`px-2.5 py-1 rounded transition-colors ${
+                  selectedCourseFilter === course ? 'bg-primary text-background font-bold' : 'text-muted hover:text-primary'
+                }`}
+              >
+                {course}
+              </button>
+            ))}
+          </div>
+
           <div className="flex items-center bg-background/80 border border-border rounded-lg overflow-hidden shrink-0 backdrop-blur">
             <button onClick={handlePrevWeek} className="p-2 hover:bg-border transition-colors text-muted hover:text-primary">
               <ChevronLeft size={18} />
             </button>
-            <button onClick={handleToday} className="px-4 py-2 text-xs font-bold border-x border-border hover:bg-border transition-colors text-muted hover:text-primary">
+            <button onClick={handleToday} className="px-3 py-2 text-xs font-bold border-x border-border hover:bg-border transition-colors text-muted hover:text-primary">
               TODAY
             </button>
             <button onClick={handleNextWeek} className="p-2 hover:bg-border transition-colors text-muted hover:text-primary">
               <ChevronRight size={18} />
             </button>
           </div>
-
-          <span className="text-sm font-mono text-muted text-right hidden sm:block">
-            Week of {format(weekStart, 'MMM d, yyyy')}
-          </span>
           
           <div className="flex items-center gap-2 shrink-0">
             <button 
+              onClick={() => setShowTbdModal(true)}
+              className="bg-surface border border-border text-yellow-400 px-3 py-2 text-xs font-bold rounded hover:bg-border transition-colors flex items-center gap-1.5"
+              title="View TBD / Unscheduled Obligations"
+            >
+              <Clock size={14} /> TBD ({tbdSyllabusItems.length})
+            </button>
+            <button 
               onClick={() => setIsWallpaperModalOpen(true)}
               className="bg-surface border border-border text-primary px-3 py-2 text-sm font-bold rounded hover:bg-border transition-colors"
-              title="Manage Wallpaper"
             >
               WALLPAPER
             </button>
@@ -96,7 +120,12 @@ export default function App() {
         <div className="flex md:grid md:grid-cols-7 overflow-x-auto md:overflow-visible gap-4 flex-1 min-h-0 snap-x snap-mandatory pb-2 md:pb-0 hide-scrollbar">
           {weekDays.map(date => {
             const dateStr = format(date, 'yyyy-MM-dd');
-            const dailyEvents = compileDay(date, events, exceptions, academicCalendar);
+            let dailyEvents = compileDay(date, events, exceptions, academicCalendar);
+
+            // Apply Course Filter
+            if (selectedCourseFilter !== 'ALL') {
+              dailyEvents = dailyEvents.filter(e => e.courseCode === selectedCourseFilter || e.category === selectedCourseFilter);
+            }
 
             return (
               <div 
@@ -115,53 +144,49 @@ export default function App() {
                   {dailyEvents.map(event => (
                     <div 
                       key={event.instanceId}
-                      className={`group p-2 rounded border text-sm flex flex-col gap-2 transition-colors ${
+                      className={`group p-2.5 rounded border text-sm flex flex-col gap-1.5 transition-colors ${
                         event.isCompleted 
-                          ? 'border-border bg-background/80 text-muted opacity-60'
-                          : event.category === 'CAREER' 
-                            ? 'border-career bg-career/10 text-blue-100'
-                            : event.category === 'CLASS'
-                              ? 'border-class bg-class/10 text-yellow-100'
-                              : 'border-border bg-background/90'
+                          ? 'border-border bg-background/80 text-muted opacity-60 line-through' 
+                          : event.courseCode === 'COSC 457'
+                            ? 'border-blue-500/40 bg-blue-500/10 text-blue-100'
+                            : event.courseCode === 'MATH 265'
+                              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
+                              : event.courseCode === 'COSC 350'
+                                ? 'border-purple-500/40 bg-purple-500/10 text-purple-100'
+                                : event.courseCode === 'COSC 418'
+                                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-100'
+                                  : 'border-border bg-background/90'
                       }`}
                     >
-                      <div className="flex justify-between items-start gap-2">
-                        <span className="font-bold leading-tight">{event.title}</span>
-                        <div className="flex gap-2 shrink-0 opacity-40 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button 
-                            onClick={() => {
-                              const baseEvent = events.find(e => e.id === event.id);
-                              if (baseEvent) {
-                                setEditingEvent(baseEvent);
-                                setIsModalOpen(true);
-                              }
-                            }}
-                            className="text-muted hover:text-blue-400 transition-colors"
-                            title="Edit Block"
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                          
-                          <button 
-                            onClick={() => deleteEvent(event.id)}
-                            className="text-muted hover:text-red-500 transition-colors"
-                            title="Delete Block"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                          
+                      <div className="flex justify-between items-start gap-1">
+                        <div className="flex flex-col">
+                          {event.courseCode && (
+                            <span className="text-[10px] font-mono font-bold uppercase tracking-wider opacity-80 flex items-center gap-1">
+                              {event.courseCode} {event.isGroupWork && <Users size={10} className="text-yellow-400" title="Group Work" />}
+                            </span>
+                          )}
+                          <span className="font-bold leading-tight">{event.title}</span>
+                        </div>
+                        <div className="flex gap-1.5 shrink-0 opacity-60 md:opacity-0 group-hover:opacity-100 transition-opacity">
                           <button 
                             onClick={() => toggleCompletion(event.instanceId, event.id, dateStr)}
-                            className="text-muted hover:text-white transition-colors"
-                            title="Mark Complete"
+                            className="text-muted hover:text-white transition-colors p-0.5"
+                            title={event.isCompleted ? "Mark Incomplete" : "Mark Complete"}
                           >
-                            {event.isCompleted ? <CheckCircle2 size={16} /> : <Circle size={16} />}
+                            {event.isCompleted ? <CheckCircle2 size={16} className="text-green-400" /> : <Circle size={16} />}
                           </button>
                         </div>
                       </div>
-                      <span className="text-xs font-mono opacity-80">
-                        {event.startTime} - {event.endTime}
-                      </span>
+                      
+                      <div className="flex items-center justify-between text-[11px] font-mono opacity-80 pt-1 border-t border-white/5">
+                        <span>{event.startTime ? `${event.startTime} - ${event.endTime}` : event.dueTime ? `Due: ${event.dueTime}` : 'All Day'}</span>
+                        <span className="uppercase text-[9px] px-1.5 py-0.5 rounded bg-black/30">{event.category}</span>
+                      </div>
+                      {event.description && (
+                        <p className="text-[10px] opacity-70 italic truncate mt-0.5" title={event.description}>
+                          {event.description}
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -170,19 +195,50 @@ export default function App() {
           })}
         </div>
 
-        {/* WEEKLY NOTES / INSPIRATION BOX */}
-        <div className="shrink-0 h-32 border border-border rounded-lg bg-surface/95 backdrop-blur-sm flex flex-col overflow-hidden focus-within:border-primary transition-colors shadow-lg">
-          <div className="bg-[#1e1e20]/90 border-b border-border px-4 py-2 text-xs font-bold text-muted tracking-wider">
-            WEEKLY FOCUS & VERSE
+        {/* WEEKLY NOTES */}
+        <div className="shrink-0 h-28 border border-border rounded-lg bg-surface/95 backdrop-blur-sm flex flex-col overflow-hidden focus-within:border-primary transition-colors shadow-lg">
+          <div className="bg-[#1e1e20]/90 border-b border-border px-4 py-1.5 text-xs font-bold text-muted tracking-wider flex items-center justify-between">
+            <span>WEEKLY FOCUS & VERSE</span>
+            <span className="font-mono text-[10px]">Week of {format(weekStart, 'MMM d, yyyy')}</span>
           </div>
           <textarea 
             value={notes[currentWeekKey] || ''}
             onChange={(e) => updateNote(currentWeekKey, e.target.value)}
-            placeholder="Enter a Bible verse or inspirational quote for this week..."
-            className="flex-1 bg-transparent p-4 text-sm text-primary resize-none outline-none leading-relaxed"
+            placeholder="Enter semester goals, weekly focus, or Bible verse..."
+            className="flex-1 bg-transparent p-3 text-sm text-primary resize-none outline-none leading-relaxed"
           />
         </div>
       </main>
+
+      {/* TBD / UNSCHEDULED OBLIGATIONS MODAL */}
+      {showTbdModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+          <div className="bg-surface border border-border rounded-lg w-full max-w-2xl p-6 max-h-[85vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4 pb-3 border-b border-border">
+              <div>
+                <h2 className="text-lg font-bold flex items-center gap-2">
+                  <Clock className="text-yellow-400" size={20} /> TBD & UNCONFIRMED SYLLABUS OBLIGATIONS
+                </h2>
+                <p className="text-xs text-muted font-mono mt-0.5">Obligations from syllabi awaiting instructor announcement or Blackboard dates.</p>
+              </div>
+              <button onClick={() => setShowTbdModal(false)} className="text-muted hover:text-primary font-mono text-sm px-2 py-1">CLOSE</button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+              {tbdSyllabusItems.map(item => (
+                <div key={item.id} className="p-3 border border-border rounded bg-background/60 flex flex-col gap-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-surface border border-border">{item.courseCode}</span>
+                    <span className="text-xs font-mono text-yellow-400 font-bold">{item.status}</span>
+                  </div>
+                  <h4 className="font-bold text-sm mt-1">{item.title}</h4>
+                  {item.notes && <p className="text-xs text-muted">{item.notes}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {isModalOpen && (
         <EventModal 
