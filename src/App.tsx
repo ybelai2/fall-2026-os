@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { format, addDays, subDays, startOfWeek } from 'date-fns';
-import { CheckCircle2, Circle, Trash2, Edit2, ChevronLeft, ChevronRight, Clock, Users, BookOpen } from 'lucide-react';
+import { CheckCircle2, Circle, ChevronLeft, ChevronRight, Clock, Users } from 'lucide-react';
 import { useCalendarStore } from './store/useCalendarStore';
 import { useWallpaperStore } from './store/useWallpaperStore';
 import { compileDay } from './store/recurrenceEngine';
@@ -18,7 +18,7 @@ export default function App() {
   const [selectedCourseFilter, setSelectedCourseFilter] = useState<string>('ALL');
   const [showTbdModal, setShowTbdModal] = useState(false);
   
-  const { events, exceptions, notes, toggleCompletion, addEvent, deleteEvent, editEvent, updateNote } = useCalendarStore();
+  const { events, exceptions, notes, toggleCompletion, addEvent, editEvent, updateNote } = useCalendarStore();
   const { getWallpaper, updateWallpaper, resetWallpaper } = useWallpaperStore();
 
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -36,7 +36,6 @@ export default function App() {
     setIsModalOpen(true);
   };
 
-  // Fetch all TBD syllabus items for the TBD view
   const tbdSyllabusItems = generateSyllabusEvents().filter(item => item.status === 'TBD' || item.status === 'ANNOUNCED_LATER');
 
   return (
@@ -54,7 +53,7 @@ export default function App() {
         </div>
       )}
 
-      {/* --- RESPONSIVE HEADER --- */}
+      {/* --- HEADER --- */}
       <header className="border-b border-border bg-surface/90 backdrop-blur px-4 md:px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
         <div>
           <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
@@ -64,7 +63,6 @@ export default function App() {
         </div>
         
         <div className="flex flex-wrap items-center gap-3 md:gap-4 w-full md:w-auto justify-between md:justify-end">
-          {/* COURSE FILTER BAR */}
           <div className="flex items-center bg-background/80 border border-border rounded-lg p-1 text-xs font-mono">
             {['ALL', 'COSC 457', 'COSC 418', 'COSC 350', 'MATH 265'].map(course => (
               <button
@@ -97,7 +95,7 @@ export default function App() {
               className="bg-surface border border-border text-yellow-400 px-3 py-2 text-xs font-bold rounded hover:bg-border transition-colors flex items-center gap-1.5"
               title="View TBD / Unscheduled Obligations"
             >
-              <Clock size={14} /> TBD ({tbdSyllabusItems.length})
+              <span title="TBD Obligations"><Clock size={14} /></span> TBD ({tbdSyllabusItems.length})
             </button>
             <button 
               onClick={() => setIsWallpaperModalOpen(true)}
@@ -116,13 +114,11 @@ export default function App() {
       </header>
 
       <main className="flex-1 p-4 md:p-6 overflow-hidden flex flex-col gap-6">
-        {/* RESPONSIVE GRID */}
         <div className="flex md:grid md:grid-cols-7 overflow-x-auto md:overflow-visible gap-4 flex-1 min-h-0 snap-x snap-mandatory pb-2 md:pb-0 hide-scrollbar">
           {weekDays.map(date => {
             const dateStr = format(date, 'yyyy-MM-dd');
             let dailyEvents = compileDay(date, events, exceptions, academicCalendar);
 
-            // Apply Course Filter
             if (selectedCourseFilter !== 'ALL') {
               dailyEvents = dailyEvents.filter(e => e.courseCode === selectedCourseFilter || e.category === selectedCourseFilter);
             }
@@ -162,7 +158,7 @@ export default function App() {
                         <div className="flex flex-col">
                           {event.courseCode && (
                             <span className="text-[10px] font-mono font-bold uppercase tracking-wider opacity-80 flex items-center gap-1">
-                              {event.courseCode} {event.isGroupWork && <Users size={10} className="text-yellow-400" title="Group Work" />}
+                              {event.courseCode} {event.isGroupWork && <span title="Group Work"><Users size={10} className="text-yellow-400" /></span>}
                             </span>
                           )}
                           <span className="font-bold leading-tight">{event.title}</span>
@@ -210,7 +206,7 @@ export default function App() {
         </div>
       </main>
 
-      {/* TBD / UNSCHEDULED OBLIGATIONS MODAL */}
+      {/* TBD MODAL */}
       {showTbdModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
           <div className="bg-surface border border-border rounded-lg w-full max-w-2xl p-6 max-h-[85vh] flex flex-col">
