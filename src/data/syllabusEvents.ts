@@ -1,11 +1,10 @@
 import { FALL_2026_SYLLABI } from './courseSyllabi';
-import { SyllabusItem } from '../types/syllabus';
+import type { SyllabusItem } from '../types/syllabus';
 import { addDays, format, parseISO, isBefore } from 'date-fns';
 
 export function generateSyllabusEvents(userCustomEdits?: Record<string, Partial<SyllabusItem>>): SyllabusItem[] {
   const allItems: SyllabusItem[] = [];
 
-  // 1. Gather static syllabus items and apply any user overrides (e.g. updating a TBD date)
   FALL_2026_SYLLABI.forEach(course => {
     course.items.forEach(item => {
       const override = userCustomEdits?.[item.id] || {};
@@ -16,10 +15,8 @@ export function generateSyllabusEvents(userCustomEdits?: Record<string, Partial<
     });
   });
 
-  // 2. Generate recurring weekly MATH 265 homework deadlines (Due Monday 11:00 PM)
-  // Fall 2026 semester range: August 24, 2026 to December 14, 2026
   const semesterEnd = parseISO('2026-12-14');
-  let currentMondayDue = parseISO('2026-08-31'); // First Monday homework due date covering week 1
+  let currentMondayDue = parseISO('2026-08-31');
   let weekCounter = 1;
 
   while (isBefore(currentMondayDue, semesterEnd) || format(currentMondayDue, 'yyyy-MM-dd') === format(semesterEnd, 'yyyy-MM-dd')) {
