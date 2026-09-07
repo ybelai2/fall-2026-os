@@ -1,5 +1,6 @@
 import { format, getDay } from 'date-fns';
 import type { CalendarEvent, EventException, AcademicDate } from '../types';
+import { generateSyllabusEvents } from '../data/syllabusEvents';
 
 export interface RenderableEvent extends CalendarEvent {
   instanceId: string; // Unique ID for this specific day's block
@@ -28,16 +29,39 @@ export function compileDay(
   const suppressClasses = holiday?.noClasses === true;
   const renderable: RenderableEvent[] = [];
 
-  // 2. Process Templates
-  templates.forEach(template => {
-    
-    // FIX: If it is a one-off event (not recurring), it MUST match today's date exactly.
-    if (!template.isRecurring && dateStr !== template.startDate) {
+  // 2. Convert Syllabus Items into Calendar Events dynamically
+  const syllabusItems = generateSyllabusEvents();
+  const syllabusAsTemplates: CalendarEvent[] = syllabusItems
+    .filter(item => item.date === dateStr && item.status !== 'TBD') // Show confirmed/recurring dates for this day
+    .map(item => ({
+      id: item.id,
+      title: item.title,
+      category: item.type as any,
+      startTime: item.startTime || '',
+      endTime: item.endTime || '',
+      dueTime: item.dueTime,
+      dueDate: item.date,
+      courseCode: item.courseCode,
+      isGroupWork: item.isGroupWork,
+      status: item.status,
+      location: item.location,
+      description: item.notes || item.latePolicy,
+      isRecurring: item.status === 'RECURRING',
+      startDate: item.date || dateStr
+    }));
+
+  // Combine user default schedule with syllabus items for this day
+  const combinedTemplates = [...templates, ...syllabusAsTemplates];
+
+  // 3. Process Templates
+  combinedTemplates.forEach(template => {
+    // If it is a one-off event (not recurring), it MUST match today's date exactly.
+    if (!template.isRecurring && dateStr !== template.startDate && dateStr !== template.dueDate) {
       return;
     }
 
     // Check start and end date boundaries
-    if (dateStr < template.startDate) return;
+    if (template.startDate && dateStr < template.startDate) return;
     if (template.endDate && dateStr > template.endDate) return;
 
     // Check if this recurring event happens on this day of the week
@@ -45,7 +69,7 @@ export function compileDay(
       return;
     }
 
-    // Holiday suppression for classes (Leaves non-class events alone)
+    // Holiday suppression for classes
     if (suppressClasses && template.category === 'CLASS') {
       return; 
     }
@@ -58,7 +82,6 @@ export function compileDay(
       return;
     }
 
-    // Apply Reality Overrides
     renderable.push({
       ...template,
       ...(exception?.overrides || {}),
@@ -69,6 +92,10 @@ export function compileDay(
     });
   });
 
-  // 3. Sort chronologically by start time
-  return renderable.sort((a, b) => a.startTime.localeCompare(b.startTime));
+  // 4. Sort chronologically by startTime or dueTime
+  return renderable.sort((a, b) => {
+    const timeA = a.startTime || a.dueTime || '00:00';
+    const timeB = b.startTime || b.dueTime || '00:00';
+    return timeA.localeCompare(timeB);
+  });
 }
