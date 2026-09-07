@@ -1,4 +1,4 @@
-import { CourseSyllabus } from '../types/syllabus';
+import type { CourseSyllabus } from '../types/syllabus';
 
 export const FALL_2026_SYLLABI: CourseSyllabus[] = [
   {
