@@ -4,6 +4,7 @@ export type Category =
   | 'CS / TECHNICAL' 
   | 'STUDY' 
   | 'PROJECT' 
+  | 'PROJECT MILESTONE'
   | 'FAITH' 
   | 'BODY' 
   | 'RELATIONSHIP' 
@@ -13,6 +14,13 @@ export type Category =
   | 'SOCIAL MEDIA' 
   | 'SLEEP' 
   | 'PERSONAL'
+  | 'HOMEWORK'
+  | 'EXAM'
+  | 'MIDTERM'
+  | 'FINAL'
+  | 'PRESENTATION'
+  | 'PAPER'
+  | 'ADMINISTRATIVE'
   | 'ACADEMIC CALENDAR' 
   | 'ACADEMIC DEADLINE' 
   | 'UNIVERSITY HOLIDAY' 
@@ -25,8 +33,13 @@ export interface BaseEvent {
   title: string;
   description?: string;
   category: Category;
-  startTime: string; // Format: "HH:mm" (e.g. "14:00")
-  endTime: string;   // Format: "HH:mm" (e.g. "15:30")
+  startTime?: string; // Optional for deadlines with only dueTime
+  endTime?: string;   
+  dueTime?: string;   // Added for deadlines (e.g. 23:00)
+  dueDate?: string;   // Added for deadlines
+  courseCode?: string; // Added to badge course code (e.g. "COSC 457")
+  isGroupWork?: boolean;
+  status?: string;
   location?: string;
   instructor?: string;
   color?: string;
@@ -64,7 +77,7 @@ export interface AcademicDate {
   universityClosed: boolean;
 }
 
-// NEW: Wallpaper System Types
+// Wallpaper System Types
 export interface WeeklyWallpaper {
   weekKey: string;       // Format: "YYYY-MM-DD" (Always a Monday)
   imageUrl: string;
