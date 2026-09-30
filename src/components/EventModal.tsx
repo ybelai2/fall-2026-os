@@ -1,88 +1,168 @@
-import React, { useState } from 'react';
-import type { Category, CalendarEvent } from '../types';
+import { useState, type FormEvent } from "react";
+import { Plus, Repeat2 } from "lucide-react";
+import type { Category, CalendarEvent } from "../types";
+import { Dialog } from "./Dialog";
+import { readableLabel } from "../lib/planner";
 
 interface EventModalProps {
   onClose: () => void;
-  onSave: (event: Omit<CalendarEvent, 'id'>) => void;
+  onSave: (event: Omit<CalendarEvent, "id">) => void;
   defaultDate: string;
   existingEvent?: CalendarEvent | null;
 }
 
-const CATEGORIES: Category[] = ['CLASS', 'CAREER', 'CS / TECHNICAL', 'STUDY', 'PROJECT', 'FAITH', 'BODY', 'PERSONAL', 'COMMUTE', 'MEAL', 'RECOVERY', 'SOCIAL MEDIA', 'SLEEP'];
+const CATEGORIES: Category[] = [
+  "CLASS",
+  "CAREER",
+  "CS / TECHNICAL",
+  "STUDY",
+  "PROJECT",
+  "FAITH",
+  "BODY",
+  "PERSONAL",
+  "COMMUTE",
+  "MEAL",
+  "RECOVERY",
+  "SOCIAL MEDIA",
+  "SLEEP",
+];
 
-export function EventModal({ onClose, onSave, defaultDate, existingEvent }: EventModalProps) {
-  const [title, setTitle] = useState(existingEvent?.title || '');
-  const [category, setCategory] = useState<Category>(existingEvent?.category || 'STUDY');
-  const [selectedDate, setSelectedDate] = useState(existingEvent?.startDate || defaultDate);
-  const [startTime, setStartTime] = useState(existingEvent?.startTime || '12:00');
-  const [endTime, setEndTime] = useState(existingEvent?.endTime || '13:00');
-  const [isRecurring, setIsRecurring] = useState(existingEvent?.isRecurring || false);
+export function EventModal({
+  onClose,
+  onSave,
+  defaultDate,
+  existingEvent,
+}: EventModalProps) {
+  const [title, setTitle] = useState(existingEvent?.title || "");
+  const [category, setCategory] = useState<Category>(
+    existingEvent?.category || "STUDY",
+  );
+  const [selectedDate, setSelectedDate] = useState(
+    existingEvent?.startDate || defaultDate,
+  );
+  const [startTime, setStartTime] = useState(
+    existingEvent?.startTime || "12:00",
+  );
+  const [endTime, setEndTime] = useState(existingEvent?.endTime || "13:00");
+  const [isRecurring, setIsRecurring] = useState(
+    existingEvent?.isRecurring || false,
+  );
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const dayOfWeek = new Date(selectedDate + 'T12:00:00').getDay();
-
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    const dayOfWeek = new Date(`${selectedDate}T12:00:00`).getDay();
     onSave({
-      title,
+      ...existingEvent,
+      title: title.trim(),
       category,
       startTime,
       endTime,
       isRecurring,
       startDate: selectedDate,
-      daysOfWeek: isRecurring ? [dayOfWeek] : undefined,
+      daysOfWeek: isRecurring
+        ? existingEvent?.startDate === selectedDate
+          ? existingEvent.daysOfWeek || [dayOfWeek]
+          : [dayOfWeek]
+        : undefined,
     });
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-      <div className="bg-surface border border-border rounded-lg w-full max-w-md p-6">
-        <h2 className="text-xl font-bold mb-4">{existingEvent ? 'EDIT BLOCK' : 'ADD BLOCK'}</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          
-          <div>
-            <label className="block text-xs font-mono text-muted mb-1">TITLE</label>
-            <input required type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-background border border-border rounded p-2 text-primary focus:border-primary outline-none transition-colors" placeholder="e.g. Deep Study" />
+    <Dialog
+      title={existingEvent ? "Edit your block" : "Make time for something."}
+      description="A class, a goal, or a little time for yourself."
+      onClose={onClose}
+    >
+      <form onSubmit={handleSubmit} className="form-stack">
+        <div className="field">
+          <label htmlFor="block-title">Block title</label>
+          <input
+            id="block-title"
+            required
+            maxLength={200}
+            type="text"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="e.g. Deep study, gym, or catch up with a friend"
+          />
+        </div>
+        <div className="form-grid">
+          <div className="field">
+            <label htmlFor="block-date">Date</label>
+            <input
+              id="block-date"
+              required
+              type="date"
+              value={selectedDate}
+              onChange={(event) => setSelectedDate(event.target.value)}
+            />
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-mono text-muted mb-1">DATE</label>
-              <input required type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full bg-background border border-border rounded p-2 text-primary focus:border-primary outline-none" />
-            </div>
-            <div>
-              <label className="block text-xs font-mono text-muted mb-1">CATEGORY</label>
-              <select value={category} onChange={e => setCategory(e.target.value as Category)} className="w-full bg-background border border-border rounded p-2 text-primary focus:border-primary outline-none">
-                {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              </select>
-            </div>
+          <div className="field">
+            <label htmlFor="block-category">Category</label>
+            <select
+              id="block-category"
+              value={category}
+              onChange={(event) => setCategory(event.target.value as Category)}
+            >
+              {CATEGORIES.map((item) => (
+                <option key={item} value={item}>
+                  {readableLabel(item)}
+                </option>
+              ))}
+            </select>
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-mono text-muted mb-1">START TIME</label>
-              <input required type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full bg-background border border-border rounded p-2 text-primary focus:border-primary outline-none" />
-            </div>
-            <div>
-              <label className="block text-xs font-mono text-muted mb-1">END TIME</label>
-              <input required type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full bg-background border border-border rounded p-2 text-primary focus:border-primary outline-none" />
-            </div>
+          <div className="field">
+            <label htmlFor="block-start">Start time</label>
+            <input
+              id="block-start"
+              required
+              type="time"
+              value={startTime}
+              onChange={(event) => setStartTime(event.target.value)}
+            />
           </div>
-
-          <div className="flex items-center gap-2 pt-2">
-            <input type="checkbox" id="recurring" checked={isRecurring} onChange={e => setIsRecurring(e.target.checked)} className="accent-primary" />
-            <label htmlFor="recurring" className="text-sm">Repeat every week on this day</label>
+          <div className="field">
+            <label htmlFor="block-end">End time</label>
+            <input
+              id="block-end"
+              required
+              type="time"
+              value={endTime}
+              onChange={(event) => setEndTime(event.target.value)}
+            />
           </div>
-
-          <div className="flex justify-end gap-3 pt-4 mt-4 border-t border-border">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-bold text-muted hover:text-primary transition-colors">CANCEL</button>
-            <button type="submit" className="bg-primary text-background px-4 py-2 text-sm font-bold rounded hover:bg-gray-200 transition-colors">
-              {existingEvent ? 'SAVE CHANGES' : 'SAVE BLOCK'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </div>
+        <label className="repeat-option">
+          <Repeat2 size={19} />
+          <span>
+            <strong>Make it a routine</strong>
+            <small>Repeat every week on this day</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={isRecurring}
+            onChange={(event) => setIsRecurring(event.target.checked)}
+          />
+        </label>
+        <div className="dialog-actions">
+          <button
+            type="button"
+            onClick={onClose}
+            className="button button-secondary"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!title.trim()}
+            className="button button-primary"
+          >
+            <Plus size={16} />
+            {existingEvent ? "Save changes" : "Add block"}
+          </button>
+        </div>
+      </form>
+    </Dialog>
   );
 }

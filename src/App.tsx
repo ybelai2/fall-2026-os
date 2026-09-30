@@ -1,267 +1,934 @@
-import { useState } from 'react';
-import { format, addDays, subDays, startOfWeek } from 'date-fns';
-import { CheckCircle2, Circle, ChevronLeft, ChevronRight, Clock, Users } from 'lucide-react';
-import { useCalendarStore } from './store/useCalendarStore';
-import { useWallpaperStore } from './store/useWallpaperStore';
-import { compileDay } from './store/recurrenceEngine';
-import { academicCalendar } from './data/academicCalendar';
-import { generateSyllabusEvents } from './data/syllabusEvents';
-import { EventModal } from './components/EventModal';
-import { WallpaperManager } from './components/WallpaperManager';
-import type { CalendarEvent, WeeklyWallpaper } from './types';
+import { useEffect, useMemo, useState } from "react";
+import {
+  addDays,
+  differenceInCalendarWeeks,
+  format,
+  isSameDay,
+  isToday,
+  parseISO,
+  startOfWeek,
+} from "date-fns";
+import {
+  ArrowDown,
+  ArrowUpRight,
+  BookOpen,
+  CalendarDays,
+  Check,
+  CheckCheck,
+  ChevronLeft,
+  ChevronRight,
+  CircleCheck,
+  Clock3,
+  EyeOff,
+  Flag,
+  Image,
+  LayoutGrid,
+  List,
+  MapPin,
+  NotebookPen,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Sprout,
+  Sun,
+  Users,
+  X,
+} from "lucide-react";
+import { useCalendarStore } from "./store/useCalendarStore";
+import { useWallpaperStore } from "./store/useWallpaperStore";
+import { compileDay, type RenderableEvent } from "./store/recurrenceEngine";
+import { academicCalendar } from "./data/academicCalendar";
+import { generateSyllabusEvents } from "./data/syllabusEvents";
+import { EventModal } from "./components/EventModal";
+import { EventCard } from "./components/EventCard";
+import { WallpaperManager } from "./components/WallpaperManager";
+import { Dialog } from "./components/Dialog";
+import {
+  COURSES,
+  courseFor,
+  displayTitle,
+  eventTime,
+  isDeadline,
+  readableLabel,
+  toneFor,
+} from "./lib/planner";
+import type { CalendarEvent } from "./types";
+
+type View = "week" | "day" | "deadlines";
+const unscheduledItems = generateSyllabusEvents().filter(
+  (item) => item.status === "TBD" || item.status === "ANNOUNCED_LATER",
+);
 
 export default function App() {
-  const [currentDate, setCurrentDate] = useState(new Date()); 
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [view, setView] = useState<View>(() =>
+    window.matchMedia("(max-width: 700px)").matches ? "day" : "week",
+  );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isWallpaperModalOpen, setIsWallpaperModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
-  const [selectedCourseFilter, setSelectedCourseFilter] = useState<string>('ALL');
+  const [blockDate, setBlockDate] = useState("");
+  const [selectedCourseFilter, setSelectedCourseFilter] = useState("ALL");
   const [showTbdModal, setShowTbdModal] = useState(false);
-  
-  const { events, exceptions, notes, toggleCompletion, addEvent, editEvent, updateNote } = useCalendarStore();
+  const [selectedEvent, setSelectedEvent] = useState<RenderableEvent | null>(
+    null,
+  );
+  const [search, setSearch] = useState("");
+  const [hideCompleted, setHideCompleted] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [failedWallpaper, setFailedWallpaper] = useState("");
+
+  const {
+    events,
+    exceptions,
+    notes,
+    toggleCompletion,
+    addEvent,
+    editEvent,
+    updateNote,
+  } = useCalendarStore();
   const { getWallpaper, updateWallpaper, resetWallpaper } = useWallpaperStore();
-
-  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-  const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i));
-  const currentWeekKey = format(weekStart, 'yyyy-MM-dd');
-  
+  const currentWeekKey = format(
+    startOfWeek(currentDate, { weekStartsOn: 1 }),
+    "yyyy-MM-dd",
+  );
+  const days = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, index) => {
+        const date = addDays(parseISO(currentWeekKey), index);
+        return {
+          date,
+          dateStr: format(date, "yyyy-MM-dd"),
+          events: compileDay(date, events, exceptions, academicCalendar),
+        };
+      }),
+    [currentWeekKey, events, exceptions],
+  );
+  const weekStart = days[0].date;
+  const weekEnd = days[6].date;
   const currentWallpaper = getWallpaper(currentWeekKey);
+  const semesterWeek =
+    differenceInCalendarWeeks(weekStart, parseISO("2026-08-24"), {
+      weekStartsOn: 1,
+    }) + 1;
+  const courseEvents = days
+    .flatMap((day) => day.events)
+    .filter(
+      (event) =>
+        selectedCourseFilter === "ALL" ||
+        courseFor(event) === selectedCourseFilter,
+    );
+  const completed = courseEvents.filter((event) => event.isCompleted).length;
+  const completionPercent = courseEvents.length
+    ? Math.round((completed / courseEvents.length) * 100)
+    : 0;
+  const deadlines = courseEvents.filter(isDeadline);
+  const remainingDeadlines = deadlines.filter(
+    (event) => !event.isCompleted,
+  ).length;
+  const dateRange = `${format(weekStart, "MMM d")} – ${format(weekEnd, weekStart.getMonth() === weekEnd.getMonth() ? "d, yyyy" : "MMM d, yyyy")}`;
+  const query = search.trim().toLowerCase();
+  const filteredDays = days.map((day) => ({
+    ...day,
+    events: day.events.filter(
+      (event) =>
+        (selectedCourseFilter === "ALL" ||
+          courseFor(event) === selectedCourseFilter) &&
+        (!hideCompleted || !event.isCompleted) &&
+        (!query ||
+          [
+            event.title,
+            event.category,
+            courseFor(event),
+            event.description,
+            event.location,
+          ].some((value) => value?.toLowerCase().includes(query))) &&
+        (view !== "deadlines" || isDeadline(event)),
+    ),
+  }));
+  const selectedDay =
+    filteredDays.find((day) => isSameDay(day.date, currentDate)) ||
+    filteredDays[0];
+  const visibleCount = (view === "day" ? [selectedDay] : filteredDays).reduce(
+    (total, day) => total + day.events.length,
+    0,
+  );
+  const activeFilters = Boolean(
+    search || hideCompleted || selectedCourseFilter !== "ALL",
+  );
+  const selectedEventCompleted = selectedEvent
+    ? Boolean(exceptions[selectedEvent.instanceId]?.isCompleted)
+    : false;
 
-  const handlePrevWeek = () => setCurrentDate(prev => subDays(prev, 7));
-  const handleNextWeek = () => setCurrentDate(prev => addDays(prev, 7));
-  const handleToday = () => setCurrentDate(new Date());
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(""), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
 
-  const openNewEventModal = () => {
+  const resetFilters = () => {
+    setSearch("");
+    setHideCompleted(false);
+    setSelectedCourseFilter("ALL");
+  };
+  const openNewBlock = (date = format(currentDate, "yyyy-MM-dd")) => {
+    setBlockDate(date);
     setEditingEvent(null);
     setIsModalOpen(true);
   };
-
-  const tbdSyllabusItems = generateSyllabusEvents().filter(item => item.status === 'TBD' || item.status === 'ANNOUNCED_LATER');
+  const renderEvent = (event: RenderableEvent, expanded = false) => (
+    <EventCard
+      key={event.instanceId}
+      event={event}
+      expanded={expanded}
+      onOpen={() => setSelectedEvent(event)}
+      onToggle={() =>
+        toggleCompletion(event.instanceId, event.id, event.originalDate)
+      }
+    />
+  );
 
   return (
-    <div className="relative min-h-screen flex flex-col font-sans text-primary isolate">
-      {/* --- WALLPAPER SYSTEM --- */}
-      <div className="fixed inset-0 bg-background -z-20" />
-      <div 
-        className="fixed inset-0 bg-cover bg-center -z-10 opacity-20 transition-all duration-700 ease-in-out"
-        style={{ backgroundImage: `url('${currentWallpaper.imageUrl}')` }}
-      />
-      {currentWallpaper.quote && (
-        <div className="fixed bottom-6 right-8 text-right -z-10 hidden md:flex flex-col items-end opacity-40 max-w-md pointer-events-none transition-opacity duration-700">
-          {currentWallpaper.title && <h3 className="font-bold text-lg tracking-widest">{currentWallpaper.title}</h3>}
-          <p className="font-mono text-sm italic">"{currentWallpaper.quote}"</p>
+    <div className="app-shell">
+      <a className="skip-link" href="#planner">
+        Skip to planner
+      </a>
+      <aside className="sidebar" aria-label="Workspace navigation">
+        <a href="#planner" className="brand">
+          <span className="brand-mark">
+            <Sprout size={24} />
+          </span>
+          <span>
+            fall<span className="brand-os">OS</span>
+            <small>A little more intentional.</small>
+          </span>
+        </a>
+        <div className="semester-badge">
+          <span className="status-dot" />
+          Fall semester <span>2026</span>
         </div>
-      )}
-
-      {/* --- HEADER --- */}
-      <header className="border-b border-border bg-surface/90 backdrop-blur px-4 md:px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
-            FALL 2026 OS <span className="text-xs font-mono px-2 py-0.5 rounded bg-class/20 text-yellow-300 border border-class/30">Syllabus Active</span>
-          </h1>
-          <p className="text-xs text-muted font-mono tracking-widest mt-1">COSC 457 • COSC 418 • COSC 350 • MATH 265</p>
+        <p className="nav-label">WORKSPACE</p>
+        <nav className="primary-nav" aria-label="Planner views">
+          <button
+            className={view === "week" ? "nav-item active" : "nav-item"}
+            onClick={() => setView("week")}
+            aria-current={view === "week" ? "page" : undefined}
+          >
+            <LayoutGrid size={18} />
+            Weekly planner
+            <span className="nav-active-dot" />
+          </button>
+          <button
+            className={view === "day" ? "nav-item active" : "nav-item"}
+            onClick={() => {
+              setCurrentDate(new Date());
+              setView("day");
+            }}
+            aria-current={view === "day" ? "page" : undefined}
+          >
+            <Sun size={19} />
+            Today’s focus
+          </button>
+          <button
+            className={view === "deadlines" ? "nav-item active" : "nav-item"}
+            onClick={() => setView("deadlines")}
+            aria-current={view === "deadlines" ? "page" : undefined}
+          >
+            <Flag size={18} />
+            Deadlines<span className="nav-count">{remainingDeadlines}</span>
+          </button>
+          <button className="nav-item" onClick={() => setShowTbdModal(true)}>
+            <Clock3 size={18} />
+            Unscheduled
+            <span className="nav-count">{unscheduledItems.length}</span>
+          </button>
+        </nav>
+        <div className="nav-section-title">
+          <p className="nav-label">MY COURSES</p>
+          <span>04</span>
         </div>
-        
-        <div className="flex flex-wrap items-center gap-3 md:gap-4 w-full md:w-auto justify-between md:justify-end">
-          <div className="flex items-center bg-background/80 border border-border rounded-lg p-1 text-xs font-mono">
-            {['ALL', 'COSC 457', 'COSC 418', 'COSC 350', 'MATH 265'].map(course => (
-              <button
-                key={course}
-                onClick={() => setSelectedCourseFilter(course)}
-                className={`px-2.5 py-1 rounded transition-colors ${
-                  selectedCourseFilter === course ? 'bg-primary text-background font-bold' : 'text-muted hover:text-primary'
-                }`}
-              >
-                {course}
-              </button>
-            ))}
+        <nav className="course-nav" aria-label="Filter by course">
+          <button
+            className={`course-nav-item ${selectedCourseFilter === "ALL" ? "selected" : ""}`}
+            onClick={() => setSelectedCourseFilter("ALL")}
+            aria-pressed={selectedCourseFilter === "ALL"}
+          >
+            <BookOpen size={16} />
+            <span>All courses & life</span>
+            {selectedCourseFilter === "ALL" && <Check size={14} />}
+          </button>
+          {COURSES.map((course) => (
+            <button
+              key={course.code}
+              className={`course-nav-item tone-${course.tone} ${selectedCourseFilter === course.code ? "selected" : ""}`}
+              onClick={() => setSelectedCourseFilter(course.code)}
+              aria-pressed={selectedCourseFilter === course.code}
+            >
+              <span className="course-dot" />
+              <span>
+                <strong>{course.code}</strong>
+                <small>{course.name}</small>
+              </span>
+              {selectedCourseFilter === course.code && <Check size={14} />}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-bottom">
+          <div className="sidebar-note">
+            <Sprout size={23} />
+            <p>
+              Small steps.
+              <br />
+              <strong>A meaningful semester.</strong>
+            </p>
           </div>
+          <button
+            className="nav-item"
+            onClick={() => setIsWallpaperModalOpen(true)}
+          >
+            <Image size={18} />
+            Personalize your space
+            <ArrowUpRight size={15} />
+          </button>
+          <div className="sidebar-footer">
+            <span className="status-dot" />
+            Your plan. Your pace.
+          </div>
+        </div>
+      </aside>
 
-          <div className="flex items-center bg-background/80 border border-border rounded-lg overflow-hidden shrink-0 backdrop-blur">
-            <button onClick={handlePrevWeek} className="p-2 hover:bg-border transition-colors text-muted hover:text-primary">
-              <ChevronLeft size={18} />
-            </button>
-            <button onClick={handleToday} className="px-3 py-2 text-xs font-bold border-x border-border hover:bg-border transition-colors text-muted hover:text-primary">
-              TODAY
-            </button>
-            <button onClick={handleNextWeek} className="p-2 hover:bg-border transition-colors text-muted hover:text-primary">
-              <ChevronRight size={18} />
-            </button>
+      <div className="main-shell">
+        {currentWallpaper.imageUrl &&
+          currentWallpaper.imageUrl !== failedWallpaper && (
+            <img
+              className="workspace-wallpaper"
+              src={currentWallpaper.imageUrl}
+              alt=""
+              onError={() => setFailedWallpaper(currentWallpaper.imageUrl)}
+            />
+          )}
+        <header className="topbar">
+          <div className="breadcrumb">
+            <span className="mobile-brand">
+              <Sprout size={21} />
+              fallOS
+            </span>
+            <span className="desktop-breadcrumb">
+              My workspace <ChevronRight size={13} />
+            </span>
+            <span className="breadcrumb-current">
+              {view === "day"
+                ? "Daily focus"
+                : view === "deadlines"
+                  ? "Deadlines"
+                  : "Weekly planner"}
+            </span>
           </div>
-          
-          <div className="flex items-center gap-2 shrink-0">
-            <button 
+          <div className="topbar-right">
+            <span className="today-date">
+              <CalendarDays size={15} />
+              {format(new Date(), "EEE, MMM d")}
+            </span>
+            <button
+              className="icon-button"
               onClick={() => setShowTbdModal(true)}
-              className="bg-surface border border-border text-yellow-400 px-3 py-2 text-xs font-bold rounded hover:bg-border transition-colors flex items-center gap-1.5"
-              title="View TBD / Unscheduled Obligations"
+              aria-label={`View ${unscheduledItems.length} unscheduled obligations`}
+              title="Unscheduled obligations"
             >
-              <span title="TBD Obligations"><Clock size={14} /></span> TBD ({tbdSyllabusItems.length})
+              <Clock3 size={18} />
             </button>
-            <button 
+            <button
+              className="icon-button"
               onClick={() => setIsWallpaperModalOpen(true)}
-              className="bg-surface border border-border text-primary px-3 py-2 text-sm font-bold rounded hover:bg-border transition-colors"
+              aria-label="Customize wallpaper"
+              title="Customize wallpaper"
             >
-              WALLPAPER
+              <SlidersHorizontal size={18} />
             </button>
-            <button 
-              onClick={openNewEventModal}
-              className="bg-primary text-background px-4 py-2 text-sm font-bold rounded hover:bg-gray-200 transition-colors"
-            >
-              + ADD BLOCK
-            </button>
+            <span className="workspace-avatar" aria-label="Personal workspace">
+              YB
+            </span>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <main className="flex-1 p-4 md:p-6 overflow-hidden flex flex-col gap-6">
-        <div className="flex md:grid md:grid-cols-7 overflow-x-auto md:overflow-visible gap-4 flex-1 min-h-0 snap-x snap-mandatory pb-2 md:pb-0 hide-scrollbar">
-          {weekDays.map(date => {
-            const dateStr = format(date, 'yyyy-MM-dd');
-            let dailyEvents = compileDay(date, events, exceptions, academicCalendar);
+        <main id="planner" className="workspace" tabIndex={-1}>
+          <section className="page-heading">
+            <div>
+              <p className="eyebrow">
+                <span className="status-dot" />
+                FALL 2026
+                {semesterWeek > 0 && semesterWeek <= 17 && (
+                  <>
+                    <span className="eyebrow-divider">/</span>WEEK{" "}
+                    {String(semesterWeek).padStart(2, "0")}
+                  </>
+                )}
+              </p>
+              <h1>
+                {view === "day"
+                  ? "One day at a time."
+                  : view === "deadlines"
+                    ? "A little ahead of the deadline."
+                    : "Your week, in focus."}
+              </h1>
+              <p className="page-description">
+                A little structure for everything that matters.
+              </p>
+            </div>
+            <button
+              className="button button-primary add-block-button"
+              onClick={() => openNewBlock()}
+            >
+              <Plus size={17} />
+              Add block
+            </button>
+          </section>
 
-            if (selectedCourseFilter !== 'ALL') {
-              dailyEvents = dailyEvents.filter(e => e.courseCode === selectedCourseFilter || e.category === selectedCourseFilter);
-            }
-
-            return (
-              <div 
-                key={dateStr} 
-                className="w-[85vw] sm:w-[300px] md:w-auto shrink-0 snap-center border border-border rounded-lg bg-surface/95 backdrop-blur-sm flex flex-col overflow-hidden shadow-lg"
-              >
-                <div className="p-3 border-b border-border bg-[#1e1e20]/90 flex justify-between items-center shrink-0">
-                  <span className="font-bold">{format(date, 'EEE').toUpperCase()}</span>
-                  <span className="text-muted text-sm font-mono">{format(date, 'd')}</span>
+          <section className="summary-grid" aria-label="Selected week overview">
+            <div className="summary-card">
+              <div>
+                <p>On your calendar</p>
+                <div className="summary-value">
+                  {courseEvents.length}
+                  <span>blocks this week</span>
                 </div>
-                
-                <div className="flex-1 p-2 space-y-2 overflow-y-auto">
-                  {dailyEvents.length === 0 && (
-                    <div className="text-xs text-muted text-center p-4">No events scheduled.</div>
-                  )}
-                  {dailyEvents.map(event => (
-                    <div 
-                      key={event.instanceId}
-                      className={`group p-2.5 rounded border text-sm flex flex-col gap-1.5 transition-colors ${
-                        event.isCompleted 
-                          ? 'border-border bg-background/80 text-muted opacity-60 line-through' 
-                          : event.courseCode === 'COSC 457'
-                            ? 'border-blue-500/40 bg-blue-500/10 text-blue-100'
-                            : event.courseCode === 'MATH 265'
-                              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
-                              : event.courseCode === 'COSC 350'
-                                ? 'border-purple-500/40 bg-purple-500/10 text-purple-100'
-                                : event.courseCode === 'COSC 418'
-                                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-100'
-                                  : 'border-border bg-background/90'
-                      }`}
+                <span className="summary-caption">
+                  {selectedCourseFilter === "ALL"
+                    ? "Classes, goals, and time for you"
+                    : selectedCourseFilter}
+                </span>
+              </div>
+              <span className="summary-icon">
+                <CalendarDays size={21} />
+              </span>
+            </div>
+            <div className="summary-card">
+              <div>
+                <p>Making progress</p>
+                <div className="summary-value">
+                  {completed}
+                  <span>of {courseEvents.length} complete</span>
+                </div>
+                <span className="summary-caption">
+                  {completionPercent === 100
+                    ? "A week well spent. Take a breath."
+                    : completed
+                      ? "One small win at a time"
+                      : "Every small step counts"}
+                </span>
+              </div>
+              <div
+                className="progress-ring"
+                role="img"
+                aria-label={`${completionPercent}% complete`}
+              >
+                <svg viewBox="0 0 48 48" aria-hidden="true">
+                  <circle cx="24" cy="24" r="20" />
+                  <circle
+                    className="progress-ring-fill"
+                    cx="24"
+                    cy="24"
+                    r="20"
+                    pathLength="100"
+                    strokeDasharray={`${completionPercent} 100`}
+                  />
+                </svg>
+                <span>{completionPercent}%</span>
+              </div>
+            </div>
+            <button
+              className="summary-card deadline-summary"
+              onClick={() => setView("deadlines")}
+            >
+              <div>
+                <p>Keep on your radar</p>
+                <div className="summary-value">
+                  {remainingDeadlines}
+                  <span>deadlines left this week</span>
+                </div>
+                <span className="summary-caption">
+                  View your due dates <ArrowUpRight size={13} />
+                </span>
+              </div>
+              <span className="summary-icon amber-icon">
+                <Flag size={21} />
+              </span>
+            </button>
+          </section>
+
+          <section className="calendar-panel" aria-label="Calendar">
+            <div className="calendar-toolbar">
+              <div className="calendar-title">
+                <span className="calendar-title-icon">
+                  <CalendarDays size={19} />
+                </span>
+                <div>
+                  <h2>
+                    {view === "day"
+                      ? format(currentDate, "EEEE, MMMM d")
+                      : dateRange}
+                  </h2>
+                  <p>
+                    {selectedCourseFilter === "ALL"
+                      ? "Your semester, with room for life."
+                      : `${selectedCourseFilter} · ${COURSES.find((course) => course.code === selectedCourseFilter)?.name}`}
+                  </p>
+                </div>
+              </div>
+              <div className="calendar-controls">
+                <div className="date-navigation">
+                  <button
+                    className="icon-button"
+                    aria-label="Previous week"
+                    onClick={() => setCurrentDate((date) => addDays(date, -7))}
+                  >
+                    <ChevronLeft size={17} />
+                  </button>
+                  <button
+                    className="today-button"
+                    onClick={() => setCurrentDate(new Date())}
+                  >
+                    Today
+                  </button>
+                  <button
+                    className="icon-button"
+                    aria-label="Next week"
+                    onClick={() => setCurrentDate((date) => addDays(date, 7))}
+                  >
+                    <ChevronRight size={17} />
+                  </button>
+                </div>
+                <div
+                  className="view-switch"
+                  role="group"
+                  aria-label="Calendar view"
+                >
+                  {(["week", "day", "deadlines"] as const).map((item) => (
+                    <button
+                      key={item}
+                      aria-pressed={view === item}
+                      className={view === item ? "selected" : ""}
+                      onClick={() => setView(item)}
                     >
-                      <div className="flex justify-between items-start gap-1">
-                        <div className="flex flex-col">
-                          {event.courseCode && (
-                            <span className="text-[10px] font-mono font-bold uppercase tracking-wider opacity-80 flex items-center gap-1">
-                              {event.courseCode} {event.isGroupWork && <span title="Group Work"><Users size={10} className="text-yellow-400" /></span>}
-                            </span>
-                          )}
-                          <span className="font-bold leading-tight">{event.title}</span>
-                        </div>
-                        <div className="flex gap-1.5 shrink-0 opacity-60 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button 
-                            onClick={() => toggleCompletion(event.instanceId, event.id, dateStr)}
-                            className="text-muted hover:text-white transition-colors p-0.5"
-                            title={event.isCompleted ? "Mark Incomplete" : "Mark Complete"}
-                          >
-                            {event.isCompleted ? <CheckCircle2 size={16} className="text-green-400" /> : <Circle size={16} />}
-                          </button>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center justify-between text-[11px] font-mono opacity-80 pt-1 border-t border-white/5">
-                        <span>{event.startTime ? `${event.startTime} - ${event.endTime}` : event.dueTime ? `Due: ${event.dueTime}` : 'All Day'}</span>
-                        <span className="uppercase text-[9px] px-1.5 py-0.5 rounded bg-black/30">{event.category}</span>
-                      </div>
-                      {event.description && (
-                        <p className="text-[10px] opacity-70 italic truncate mt-0.5" title={event.description}>
-                          {event.description}
-                        </p>
+                      {item === "week" ? (
+                        <LayoutGrid size={14} />
+                      ) : item === "day" ? (
+                        <List size={14} />
+                      ) : (
+                        <Flag size={14} />
                       )}
-                    </div>
+                      {item === "deadlines" ? "Due" : readableLabel(item)}
+                    </button>
                   ))}
                 </div>
               </div>
-            );
-          })}
-        </div>
-
-        {/* WEEKLY NOTES */}
-        <div className="shrink-0 h-28 border border-border rounded-lg bg-surface/95 backdrop-blur-sm flex flex-col overflow-hidden focus-within:border-primary transition-colors shadow-lg">
-          <div className="bg-[#1e1e20]/90 border-b border-border px-4 py-1.5 text-xs font-bold text-muted tracking-wider flex items-center justify-between">
-            <span>WEEKLY FOCUS & VERSE</span>
-            <span className="font-mono text-[10px]">Week of {format(weekStart, 'MMM d, yyyy')}</span>
-          </div>
-          <textarea 
-            value={notes[currentWeekKey] || ''}
-            onChange={(e) => updateNote(currentWeekKey, e.target.value)}
-            placeholder="Enter semester goals, weekly focus, or Bible verse..."
-            className="flex-1 bg-transparent p-3 text-sm text-primary resize-none outline-none leading-relaxed"
-          />
-        </div>
-      </main>
-
-      {/* TBD MODAL */}
-      {showTbdModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-          <div className="bg-surface border border-border rounded-lg w-full max-w-2xl p-6 max-h-[85vh] flex flex-col">
-            <div className="flex justify-between items-center mb-4 pb-3 border-b border-border">
-              <div>
-                <h2 className="text-lg font-bold flex items-center gap-2">
-                  <Clock className="text-yellow-400" size={20} /> TBD & UNCONFIRMED SYLLABUS OBLIGATIONS
-                </h2>
-                <p className="text-xs text-muted font-mono mt-0.5">Obligations from syllabi awaiting instructor announcement or Blackboard dates.</p>
+            </div>
+            <div className="filter-toolbar">
+              <label className="search-field">
+                <Search size={16} />
+                <input
+                  type="search"
+                  placeholder="Find a block…"
+                  aria-label="Search calendar blocks"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </label>
+              <div className="filter-actions">
+                <select
+                  className="course-select"
+                  aria-label="Filter by course"
+                  value={selectedCourseFilter}
+                  onChange={(event) =>
+                    setSelectedCourseFilter(event.target.value)
+                  }
+                >
+                  <option value="ALL">All courses & life</option>
+                  {COURSES.map((course) => (
+                    <option key={course.code}>{course.code}</option>
+                  ))}
+                </select>
+                <button
+                  className={`filter-button ${hideCompleted ? "enabled" : ""}`}
+                  onClick={() => setHideCompleted((value) => !value)}
+                  aria-pressed={hideCompleted}
+                >
+                  <EyeOff size={15} />
+                  <span>Hide completed</span>
+                </button>
+                {activeFilters && (
+                  <button
+                    className="clear-filter"
+                    onClick={resetFilters}
+                    aria-label="Clear filters"
+                    title="Clear filters"
+                  >
+                    <X size={15} />
+                  </button>
+                )}
               </div>
-              <button onClick={() => setShowTbdModal(false)} className="text-muted hover:text-primary font-mono text-sm px-2 py-1">CLOSE</button>
             </div>
-            
-            <div className="flex-1 overflow-y-auto space-y-3 pr-2">
-              {tbdSyllabusItems.map(item => (
-                <div key={item.id} className="p-3 border border-border rounded bg-background/60 flex flex-col gap-1">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-surface border border-border">{item.courseCode}</span>
-                    <span className="text-xs font-mono text-yellow-400 font-bold">{item.status}</span>
-                  </div>
-                  <h4 className="font-bold text-sm mt-1">{item.title}</h4>
-                  {item.notes && <p className="text-xs text-muted">{item.notes}</p>}
+
+            {view === "week" ? (
+              <div
+                className="week-scroll"
+                tabIndex={0}
+                role="region"
+                aria-label="Weekly calendar, scroll horizontally to see all days"
+              >
+                <div className="week-grid">
+                  {filteredDays.map((day) => (
+                    <section
+                      key={day.dateStr}
+                      className={`day-column ${isToday(day.date) ? "is-today" : ""} ${day.date.getDay() === 0 || day.date.getDay() === 6 ? "is-weekend" : ""}`}
+                      aria-label={format(day.date, "EEEE, MMMM d")}
+                    >
+                      <button
+                        className="day-heading"
+                        onClick={() => {
+                          setCurrentDate(day.date);
+                          setView("day");
+                        }}
+                        aria-label={`Open ${format(day.date, "EEEE, MMMM d")}`}
+                      >
+                        <span>
+                          {format(day.date, "EEE")}
+                          <span className="day-count">
+                            {day.events.length}{" "}
+                            {day.events.length === 1 ? "block" : "blocks"}
+                          </span>
+                        </span>
+                        <span className="day-number">
+                          {format(day.date, "d")}
+                        </span>
+                      </button>
+                      <div className="day-events">
+                        {day.events.map((event) => renderEvent(event))}
+                        {day.events.length === 0 && (
+                          <div className="day-empty">
+                            <span className="empty-dash" />
+                            {activeFilters
+                              ? "No matching blocks"
+                              : "A little breathing room"}
+                          </div>
+                        )}
+                        <button
+                          className="day-add"
+                          onClick={() => openNewBlock(day.dateStr)}
+                          aria-label={`Add block on ${format(day.date, "EEEE, MMMM d")}`}
+                        >
+                          <Plus size={14} />
+                          Add block
+                        </button>
+                      </div>
+                    </section>
+                  ))}
                 </div>
-              ))}
+              </div>
+            ) : (
+              <div className="agenda-panel">
+                {view === "day" && (
+                  <div
+                    className="day-picker"
+                    role="group"
+                    aria-label="Select a day"
+                  >
+                    {days.map((day) => (
+                      <button
+                        key={day.dateStr}
+                        className={`${isSameDay(day.date, currentDate) ? "selected" : ""} ${isToday(day.date) ? "picker-today" : ""}`}
+                        onClick={() => setCurrentDate(day.date)}
+                        aria-pressed={isSameDay(day.date, currentDate)}
+                        aria-label={format(day.date, "EEEE, MMMM d")}
+                      >
+                        <span>{format(day.date, "EEE")}</span>
+                        <strong>{format(day.date, "d")}</strong>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {visibleCount === 0 ? (
+                  <div className="agenda-empty">
+                    <span>
+                      <Sun size={27} />
+                    </span>
+                    <h3>
+                      {activeFilters
+                        ? "Nothing matches just yet."
+                        : view === "deadlines"
+                          ? "Room to breathe."
+                          : "A little open space."}
+                    </h3>
+                    <p>
+                      {activeFilters
+                        ? "Try another search or clear your filters."
+                        : view === "deadlines"
+                          ? "No deadlines scheduled for this week."
+                          : "Make time for something that matters to you."}
+                    </p>
+                    <button
+                      className="button button-secondary"
+                      onClick={() =>
+                        activeFilters ? resetFilters() : openNewBlock()
+                      }
+                    >
+                      {activeFilters ? "Clear filters" : "Add a block"}
+                      <Plus size={15} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="agenda-list">
+                    {(view === "day"
+                      ? [selectedDay]
+                      : filteredDays.filter((day) => day.events.length)
+                    ).map((day) => (
+                      <section key={day.dateStr} className="agenda-day">
+                        <div className="agenda-day-label">
+                          <span>{format(day.date, "EEE")}</span>
+                          <strong>{format(day.date, "d")}</strong>
+                          <small>{format(day.date, "MMM")}</small>
+                        </div>
+                        <div className="agenda-events">
+                          {day.events.map((event) => renderEvent(event, true))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="calendar-footer">
+              <span>
+                <span className="status-dot" />
+                Syllabus included <span className="footer-divider">·</span>{" "}
+                {visibleCount} {visibleCount === 1 ? "block" : "blocks"} shown
+              </span>
+              <span className="calendar-hint">
+                <CircleCheck size={13} />
+                Check off a block. Keep moving.
+              </span>
             </div>
-          </div>
+          </section>
+
+          <section className="reflection-grid" aria-label="Weekly reflections">
+            <div className="notes-panel">
+              <div className="notes-heading">
+                <h2>
+                  <NotebookPen size={18} />A focus for the week
+                </h2>
+                <span>
+                  <CheckCheck size={14} />
+                  Saved on this device
+                </span>
+              </div>
+              <label className="sr-only" htmlFor="weekly-notes">
+                Weekly focus and verse
+              </label>
+              <textarea
+                id="weekly-notes"
+                value={notes[currentWeekKey] || ""}
+                onChange={(event) =>
+                  updateNote(currentWeekKey, event.target.value)
+                }
+                placeholder="What matters most this week? A goal, a reminder, or a verse to carry with you…"
+              />
+              <div className="notes-footer">
+                <span>WEEK OF {format(weekStart, "MMM d").toUpperCase()}</span>
+                <span>A clear mind starts here.</span>
+              </div>
+            </div>
+            <div className="inspiration-card">
+              {currentWallpaper.imageUrl &&
+                currentWallpaper.imageUrl !== failedWallpaper && (
+                  <img
+                    className="inspiration-image"
+                    src={currentWallpaper.imageUrl}
+                    alt=""
+                    onError={() =>
+                      setFailedWallpaper(currentWallpaper.imageUrl)
+                    }
+                  />
+                )}
+              <div className="inspiration-content">
+                <div className="inspiration-heading">
+                  <span>
+                    <Sprout size={15} />A MOMENT TO RECENTER
+                  </span>
+                  <button
+                    className="inspiration-edit"
+                    onClick={() => setIsWallpaperModalOpen(true)}
+                    aria-label="Edit weekly inspiration"
+                  >
+                    <ArrowUpRight size={17} />
+                  </button>
+                </div>
+                <blockquote>
+                  {currentWallpaper.quote ||
+                    "Make a little space for what matters."}
+                </blockquote>
+                <p>{currentWallpaper.title || "YOUR WEEKLY REMINDER"}</p>
+              </div>
+            </div>
+          </section>
+          <footer className="workspace-footer">
+            <span>Designed around your days.</span>
+            <span>
+              One block at a time.
+              <ArrowDown size={12} />
+            </span>
+          </footer>
+        </main>
+      </div>
+
+      {notice && (
+        <div className="toast" role="status">
+          <CircleCheck size={17} />
+          {notice}
         </div>
       )}
-
+      {showTbdModal && (
+        <Dialog
+          wide
+          title="On the horizon."
+          description="Syllabus obligations waiting for a date. Check your instructor’s announcements or Blackboard for updates."
+          onClose={() => setShowTbdModal(false)}
+        >
+          <div className="unscheduled-list">
+            {unscheduledItems.map((item) => (
+              <article
+                className={`unscheduled-item tone-${toneFor({ ...item, category: "PERSONAL" })}`}
+                key={item.id}
+              >
+                <div>
+                  <span className="course-pill">{item.courseCode}</span>
+                  <span className="pending-pill">
+                    <Clock3 size={12} />
+                    {item.status === "TBD" ? "Date TBD" : "Announced later"}
+                  </span>
+                </div>
+                <h3>{item.title}</h3>
+                {item.notes && <p>{item.notes}</p>}
+              </article>
+            ))}
+          </div>
+        </Dialog>
+      )}
+      {selectedEvent && (
+        <Dialog
+          title={displayTitle(selectedEvent)}
+          description={format(
+            parseISO(selectedEvent.originalDate),
+            "EEEE, MMMM d, yyyy",
+          )}
+          onClose={() => setSelectedEvent(null)}
+        >
+          <div className="event-detail">
+            <div className="detail-badges">
+              <span className={`course-pill tone-${toneFor(selectedEvent)}`}>
+                {courseFor(selectedEvent) ||
+                  readableLabel(selectedEvent.category)}
+              </span>
+              {courseFor(selectedEvent) && (
+                <span className="neutral-pill">
+                  {readableLabel(selectedEvent.category)}
+                </span>
+              )}
+              {selectedEvent.isGroupWork && (
+                <span className="neutral-pill">
+                  <Users size={13} />
+                  Group work
+                </span>
+              )}
+            </div>
+            <p>
+              <Clock3 size={17} />
+              {eventTime(selectedEvent)}
+            </p>
+            {selectedEvent.location && (
+              <p>
+                <MapPin size={17} />
+                {selectedEvent.location}
+              </p>
+            )}
+            {selectedEvent.instructor && (
+              <p>
+                <BookOpen size={17} />
+                {selectedEvent.instructor}
+              </p>
+            )}
+            {selectedEvent.description && (
+              <div className="detail-description">
+                {selectedEvent.description}
+              </div>
+            )}
+            <div className="dialog-actions actions-split">
+              {selectedEvent.id.startsWith("user_") ? (
+                <button
+                  className="button button-secondary"
+                  onClick={() => {
+                    setEditingEvent(
+                      events.find((event) => event.id === selectedEvent.id) ||
+                        null,
+                    );
+                    setSelectedEvent(null);
+                    setIsModalOpen(true);
+                  }}
+                >
+                  Edit block
+                </button>
+              ) : (
+                <span />
+              )}
+              <button
+                className="button button-primary"
+                onClick={() =>
+                  toggleCompletion(
+                    selectedEvent.instanceId,
+                    selectedEvent.id,
+                    selectedEvent.originalDate,
+                  )
+                }
+              >
+                <Check size={16} />
+                {selectedEventCompleted ? "Mark incomplete" : "Mark complete"}
+              </button>
+            </div>
+          </div>
+        </Dialog>
+      )}
       {isModalOpen && (
-        <EventModal 
-          defaultDate={format(currentDate, 'yyyy-MM-dd')}
+        <EventModal
+          defaultDate={blockDate || format(currentDate, "yyyy-MM-dd")}
           existingEvent={editingEvent}
           onClose={() => {
             setIsModalOpen(false);
             setEditingEvent(null);
           }}
-          onSave={(newEventData: Omit<CalendarEvent, 'id'>) => {
-            if (editingEvent) {
-              editEvent(editingEvent.id, newEventData);
-            } else {
-              addEvent(newEventData);
-            }
-            setIsModalOpen(false);
-            setEditingEvent(null);
+          onSave={(event) => {
+            if (editingEvent) editEvent(editingEvent.id, event);
+            else addEvent(event);
+            setNotice(
+              editingEvent
+                ? "Block updated. You’re all set."
+                : "A little time, well planned. Block added.",
+            );
           }}
         />
       )}
-
       {isWallpaperModalOpen && (
-        <WallpaperManager 
+        <WallpaperManager
           currentWallpaper={currentWallpaper}
           onClose={() => setIsWallpaperModalOpen(false)}
-          onSave={(data: Partial<WeeklyWallpaper>) => updateWallpaper(currentWeekKey, data)}
-          onReset={() => resetWallpaper(currentWeekKey)}
+          onSave={(data) => {
+            updateWallpaper(currentWeekKey, data);
+            setFailedWallpaper("");
+            setNotice("Your space, refreshed.");
+          }}
+          onReset={() => {
+            resetWallpaper(currentWeekKey);
+            setFailedWallpaper("");
+            setNotice("Default wallpaper restored.");
+          }}
         />
       )}
     </div>
