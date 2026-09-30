@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import type { WeeklyWallpaper } from '../types';
+import { useState, type FormEvent } from "react";
+import { ImagePlus, RotateCcw } from "lucide-react";
+import type { WeeklyWallpaper } from "../types";
+import { Dialog } from "./Dialog";
 
 interface WallpaperManagerProps {
   currentWallpaper: WeeklyWallpaper;
@@ -8,91 +10,110 @@ interface WallpaperManagerProps {
   onReset: () => void;
 }
 
-export function WallpaperManager({ currentWallpaper, onClose, onSave, onReset }: WallpaperManagerProps) {
-  const [imageUrl, setImageUrl] = useState(currentWallpaper.imageUrl || '');
-  const [title, setTitle] = useState(currentWallpaper.title || '');
-  const [quote, setQuote] = useState(currentWallpaper.quote || '');
+export function WallpaperManager({
+  currentWallpaper,
+  onClose,
+  onSave,
+  onReset,
+}: WallpaperManagerProps) {
+  const [imageUrl, setImageUrl] = useState(currentWallpaper.imageUrl || "");
+  const [title, setTitle] = useState(currentWallpaper.title || "");
+  const [quote, setQuote] = useState(currentWallpaper.quote || "");
+  const [failedImage, setFailedImage] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
     onSave({ imageUrl, title, quote });
     onClose();
   };
 
-  const handleReset = () => {
-    onReset();
-    onClose();
-  };
-
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-      <div className="bg-surface border border-border rounded-lg w-full max-w-md p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">MANAGE WALLPAPER</h2>
-          <span className="text-xs font-mono text-muted">{currentWallpaper.weekKey}</span>
+    <Dialog
+      title="Make this week yours."
+      description="Choose a wallpaper and a few words to come back to."
+      onClose={onClose}
+    >
+      <form onSubmit={handleSubmit} className="form-stack">
+        <div className="wallpaper-preview">
+          {imageUrl && imageUrl !== failedImage && (
+            <img
+              src={imageUrl}
+              alt="Wallpaper preview"
+              onError={() => setFailedImage(imageUrl)}
+            />
+          )}
+          <div>
+            <ImagePlus size={20} />
+            <strong>{title || "Your weekly inspiration"}</strong>
+            <p>{quote || "A little reminder of what matters."}</p>
+          </div>
         </div>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {failedImage === imageUrl && imageUrl && (
+          <p className="field-hint" role="status">
+            This image could not be loaded. Check the link or try another image.
+          </p>
+        )}
+        <div className="field">
+          <label htmlFor="wallpaper-url">Image URL or path</label>
+          <input
+            id="wallpaper-url"
+            required
+            type="text"
+            value={imageUrl}
+            onChange={(event) => setImageUrl(event.target.value)}
+            placeholder="https://… or /wallpapers/Kobe.png"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="wallpaper-title">
+            Title <span>(optional)</span>
+          </label>
+          <input
+            id="wallpaper-title"
+            type="text"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="One thing at a time"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="wallpaper-quote">
+            Your reminder <span>(optional)</span>
+          </label>
+          <textarea
+            id="wallpaper-quote"
+            value={quote}
+            onChange={(event) => setQuote(event.target.value)}
+            placeholder="A quote, a verse, or a thought for the week…"
+            rows={3}
+          />
+        </div>
+        <div className="dialog-actions actions-split">
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => {
+              onReset();
+              onClose();
+            }}
+          >
+            <RotateCcw size={14} />
+            Reset
+          </button>
           <div>
-            <label className="block text-xs font-mono text-muted mb-1">IMAGE URL / PATH</label>
-            <input 
-              required 
-              type="text" 
-              value={imageUrl} 
-              onChange={e => setImageUrl(e.target.value)} 
-              className="w-full bg-background border border-border rounded p-2 text-primary focus:border-primary outline-none transition-colors font-mono text-sm" 
-              placeholder="/wallpapers/week-01.jpg or https://..." 
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-mono text-muted mb-1">TITLE (OPTIONAL)</label>
-            <input 
-              type="text" 
-              value={title} 
-              onChange={e => setTitle(e.target.value)} 
-              className="w-full bg-background border border-border rounded p-2 text-primary focus:border-primary outline-none transition-colors" 
-              placeholder="e.g. FOCUS WEEK" 
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-mono text-muted mb-1">QUOTE (OPTIONAL)</label>
-            <textarea 
-              value={quote} 
-              onChange={e => setQuote(e.target.value)} 
-              className="w-full bg-background border border-border rounded p-2 text-primary focus:border-primary outline-none transition-colors resize-none" 
-              placeholder="e.g. Discipline equals freedom." 
-              rows={3}
-            />
-          </div>
-
-          <div className="flex justify-between items-center pt-4 mt-4 border-t border-border">
-            <button 
-              type="button" 
-              onClick={handleReset} 
-              className="text-xs font-bold text-red-500 hover:text-red-400 transition-colors"
+            <button
+              type="button"
+              onClick={onClose}
+              className="button button-secondary"
             >
-              RESET TO DEFAULT
+              Cancel
             </button>
-            <div className="flex gap-3">
-              <button 
-                type="button" 
-                onClick={onClose} 
-                className="px-4 py-2 text-sm font-bold text-muted hover:text-primary transition-colors"
-              >
-                CANCEL
-              </button>
-              <button 
-                type="submit" 
-                className="bg-primary text-background px-4 py-2 text-sm font-bold rounded hover:bg-gray-200 transition-colors"
-              >
-                SAVE
-              </button>
-            </div>
+            <button type="submit" className="button button-primary">
+              Save wallpaper
+            </button>
           </div>
-        </form>
-      </div>
-    </div>
+        </div>
+      </form>
+    </Dialog>
   );
 }

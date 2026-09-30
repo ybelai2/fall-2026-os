@@ -25,7 +25,7 @@ export function useWallpaperStore() {
     // 3. Absolute fallback
     return { 
       weekKey, 
-      imageUrl: '/wallpapers/default.jpg',
+      imageUrl: '/wallpapers/default.svg',
       title: 'FALL 2026',
       quote: 'Focus. Discipline. Finish Strong.'
     };
