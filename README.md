@@ -1,32 +1,47 @@
-# React + TypeScript + Vite
+# Fall 2026 OS
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+**A semester planner built with React, TypeScript, and Vite.**
 
-Currently, two official plugins are available:
+[Live app](https://fall-2026-os.vercel.app/)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Fall 2026 OS combines a weekly class schedule, syllabus-derived dates, and personal planning blocks in one calendar. It was built for a specific semester at Towson University rather than as a general-purpose scheduling SaaS.
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Weekly calendar:** navigate between weeks, jump to today, and filter by course.
+- **Recurring events:** generate dated instances from templates, with academic-calendar rules that can suppress class events on no-class days.
+- **Course obligations:** display dated syllabus items and a separate list of items without confirmed dates.
+- **Personal planning:** add or edit blocks, mark individual event instances complete, and maintain week-specific notes.
+- **Customization:** change week-specific wallpapers and quotes.
+- **Local persistence:** browser `localStorage` stores events, exceptions, notes, and preferences.
 
-## Expanding the Oxlint configuration
+## Technical design
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+The frontend uses **React + TypeScript**, **date-fns** for calendar calculations, **Tailwind CSS** for styling, and **Vite** for development and builds.
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+- `src/store/recurrenceEngine.ts` converts schedule templates and syllabus entries into the day's visible events, applies exceptions, and orders the results.
+- `src/store/useCalendarStore.ts` manages calendar state and persists it locally.
+- `src/data/` contains the semester-specific academic calendar, syllabi, and default schedule.
+- `src/components/` holds event editing and wallpaper controls.
+
+## Run locally
+
+Requires a recent Node.js release and npm.
+
+```bash
+npm ci
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+To check and build:
+
+```bash
+npm run lint
+npm run build
+```
+
+## Scope and limitations
+
+This is a **client-side, single-user planner**. It does not implement accounts, cloud sync, shared calendars, or external-calendar integration. The shipped schedule is specific to Fall 2026; its dates should not be treated as current university guidance. Data is specific to the browser and may be lost when site storage is cleared.
+
+The app demonstrates state modeling, recurrence rules, and UI implementation; the presence of build and lint scripts is not itself a claim of automated test coverage.
